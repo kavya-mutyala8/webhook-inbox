@@ -33,7 +33,7 @@ Tested on Windows with Python 3.14.
 ```
 python -m venv venv
 venv\Scripts\activate
-pip install flask requests
+pip install -r requirements.txt
 python app.py
 ```
 
