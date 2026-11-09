@@ -11,7 +11,7 @@ data_to_send = {
 
 response = requests.post(url, json=data_to_send)
 
-print("Falsk echoed back: ")
+print("Flask echoed back: ")
 print("Status code:", response.status_code)
 print("Raw text response:", response.text)
 
