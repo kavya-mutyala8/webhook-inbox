@@ -4,10 +4,13 @@ A small Flask server that receives order-status events as JSON, refuses duplicat
 
 ## What works today
 
-- Accepts an event sent as JSON (`event_id`, `order_id`, `status`, `version`)
-- Rejects a request with no JSON body
-- Rejects an event with a missing field
-- Rejects a version that is not a number
+- `POST /event` accepts a JSON object with `event_id`, `order_id`, `status`, `version`, `timestamp` and `source`
+- Rejects an empty body, broken JSON, or JSON that is not an object (400)
+- Rejects a missing field and names it
+- `event_id` and `order_id` must be non-empty text, at most 64 characters
+- `status` must be one of: placed, paid, packed, out_for_delivery, delivered, cancelled
+- `source` must be one of: payment, warehouse, rider
+- `version` must be a whole number of 1 or more (`true`, decimals and text are rejected)
 - Refuses a duplicate or an older version (returns 400) and accepts a newer version
 - Saves events to `data.json`, so they are still there after a restart
 
@@ -25,6 +28,8 @@ A small Flask server that receives order-status events as JSON, refuses duplicat
 - Versions are compared per `event_id`, not per order yet
 - Events are stored in a JSON file, which is not safe if many requests arrive at the same time
 - A duplicate and an older version get the same 400 answer
+- The server runs with debug mode on, which is only safe on my own laptop
+- `timestamp` is only checked to be non-empty text for now (a real date check comes with the replay window)
 
 ## How to run
 
