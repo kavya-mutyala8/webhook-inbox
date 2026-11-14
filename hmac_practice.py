@@ -15,9 +15,6 @@ print(f"Length of hash: {len(hash1)} characters\n")
 
 #h2
 def sign(secret: str, message: str) -> str:
-    """Signs raw bytes of a message using a secret key with HMAC-SHA256."""
-    # H4 Reminder: We convert to raw bytes (utf-8) because cryptographic 
-    # functions operate on exact byte streams, not parsed/reordered structures.
     secret_bytes = secret.encode("utf-8")
     message_bytes = message.encode("utf-8")
     
@@ -33,17 +30,13 @@ print(f"Generated Signature: {valid_signature}\n")
 
 #h3
 def verify(secret: str, message: str, provided_signature: str) -> bool:
-    """
-    Recomputes the expected signature and compares it safely 
-    using hmac.compare_digest to prevent timing attacks.
-    """
     if not provided_signature:
         return False
-        
-    expected_signature = sign(secret, message)
-    return hmac.compare_digest(expected_signature, provided_signature)
-
-
+    try: 
+        expected_signature = sign(secret, message)
+        return hmac.compare_digest(expected_signature, provided_signature)
+    except Exception:
+        return False
 #h5
 def run_tests():
     secret = "my_safe_password"
@@ -63,6 +56,16 @@ def run_tests():
 
     assert verify(secret, message, "") == False, "Test 4 Failed!"
     print(" [X] Test 4: Empty signature fails -> PASSED")
+
+    international_message = "Café & Naïve résumé 😊"
+    good_unicode_message = sign(secret, international_message)
+
+    assert verify(secret, international_message, good_unicode_message) == True, "Test 5 Failed"
+    print("[X] Test 5: Unicode and emoji characters -> PASSED")
+
+    fake_unicode_sig = "fake_signature_abc123_é"
+    assert verify(secret, message, fake_unicode_sig) == False, "Test 6 Failed!"
+    print("[X] Test 6: Fake signature with unicode characters fails -> PASSED")
 
 if __name__ == "__main__":
     run_tests()
