@@ -1,6 +1,12 @@
+import os
+import json
+import hmac
+import hashlib
 import requests
+from dotenv import load_dotenv
 
-url = "http://127.0.0.1:5000/event"
+load_dotenv()
+SECRET_KEY = os.getenv("WEBHOOK_SECRET")
 
 data_to_send = {
     "event_id": "evt_1001",
@@ -11,13 +17,22 @@ data_to_send = {
     "source": "payment"
 }
 
-response = requests.post(url, json=data_to_send)
+payload_string = json.dumps(data_to_send)
 
-print("Flask echoed back: ")
+signature = hmac.new(
+    SECRET_KEY.encode("utf-8"), 
+    payload_string.encode("utf-8"), 
+    hashlib.sha256
+).hexdigest()
+
+headers = {
+    "X-Sign": signature,
+    "Content-Type": "application/json"
+}
+
+url = "http://127.0.0.1:5000/webhook"
+response = requests.post(url, data=payload_string, headers=headers)
+
+print("Flask echoed back:")
 print("Status code:", response.status_code)
 print("Raw text response:", response.text)
-
-try:
-    print(response.json())
-except Exception:
-    print("Response was not JSON")
