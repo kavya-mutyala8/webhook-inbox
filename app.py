@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 load_dotenv()
 SECRET_KEY = os.getenv("WEBHOOK_SECRET")
 
+if not SECRET_KEY:
+    raise RuntimeError("CRITICAL: WEBHOOK_SECRET is missing from environment variables or .env file!")
+
 app = Flask(__name__)
 
 def verify(secret: str, message: bytes, provided_signature: str) -> bool:
@@ -42,14 +45,13 @@ def save_data():
 
 events = load_data()
 
-@app.route("/webhook", methods=["POST"])
-def receive_webhook():
+@app.route("/event", methods=["POST"])
+def receive_event():
     raw_data = request.data
-    incoming_sign = request.headers.get("X-Sign", "")
+    incoming_sign = request.headers.get("X-Signature", "")
 
-    is_valid = verify(SECRET_KEY, raw_data, incoming_sign)
-    if not is_valid:
-        return {"error": "Unauthorized: Bad signature!"}, 403
+    if not verify(SECRET_KEY, raw_data, incoming_sign):
+        return {"error": "Unauthorized"}, 401
 
     incoming_data = request.get_json(silent=True)
     if not isinstance(incoming_data, dict):
@@ -104,7 +106,6 @@ def receive_webhook():
     events.append(incoming_data)
     save_data()
 
-    print("Success! Verified webhook received and saved.")
     return {"Message": "success", "data": incoming_data}, 201
 
 if __name__ == "__main__":
