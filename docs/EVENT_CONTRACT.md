@@ -87,3 +87,11 @@ Bad examples:
 - `status` is `"teleported"` -> 400
 - missing `order_id` -> 400
 - same `event_id` sent twice -> 200 with `duplicate` the second time
+
+## W4: Replay Attack Prevention & Timestamp Window
+
+- **Replay Window:** 5 minutes (300 seconds).
+- **Why:** A short window prevents attackers from replaying intercepted messages, while preventing honest messages from failing due to minor clock drift between servers.
+- **Error Response:** Any request with a timestamp older than 5 minutes, too far in the future, missing, or malformed will be rejected with `401 Unauthorized` (using the same generic message as a bad signature to avoid leaking info).
+- **Header Contract:** `X-Timestamp` (Unix epoch seconds) is required alongside `X-Signature`.
+- **Signing Format:** The signature is computed over `timestamp + "." + body_bytes`.
