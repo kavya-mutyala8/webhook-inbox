@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import hmac
 import hashlib
 import requests
@@ -20,24 +21,26 @@ data_to_send = {
     "source": "payment"
 }
 
+current_timestamp = str(int(time.time()))
+
 payload_string = json.dumps(data_to_send)
-payload_bytes = payload_string.encode("utf-8")
+combined_message = f"{current_timestamp}.".encode("utf-8") + payload_string.encode("utf-8")
 
 signature = hmac.new(
-    SECRET_KEY.encode("utf-8"), 
-    payload_bytes, 
+    SECRET_KEY.encode("utf-8"),
+    combined_message,
     hashlib.sha256
-).hexdigest()
+).hex_digest() if hasattr(hmac.new(SECRET_KEY.encode("utf-8"), combined_message, hashlib.sha256), "hexdigest") else hmac.new(SECRET_KEY.encode("utf-8"), combined_message, hashlib.sha256).hexdigest()
 
 headers = {
     "X-Signature": signature,
+    "X-Timestamp": current_timestamp,
     "Content-Type": "application/json"
 }
 
-# 6. Send POST request to the /event route
 url = "http://127.0.0.1:5000/event"
-response = requests.post(url, data=payload_bytes, headers=headers)
+response = requests.post(url, data=payload_string, headers=headers)
 
-print("--- Sender Report ---")
+print("--- Sender Report (W4 Step 2) ---")
 print("Status code:", response.status_code)
 print("Response Body:", response.text)
