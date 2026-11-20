@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import hmac
 import hashlib
 from flask import Flask, request
@@ -49,9 +50,30 @@ events = load_data()
 def receive_event():
     raw_data = request.data
     incoming_sign = request.headers.get("X-Signature", "")
+    incoming_timestamp_str = request.headers.get("X-Timestamp", "")
 
-    if not verify(SECRET_KEY, raw_data, incoming_sign):
+    if not incoming_timestamp_str or not incoming_timestamp_str.isdigit():
+        return {"error": "Unauthorized: Missing or invalid timestamp"}, 401
+
+    try:
+        incoming_timestamp = int(incoming_timestamp_str)
+    except ValueError:
+        return {"error": "Unauthorized: Invalid timestamp format"}, 401
+
+    combined_message = f"{incoming_timestamp_str}.".encode("utf-8") + raw_data
+
+    if not verify(SECRET_KEY, combined_message, incoming_sign):
         return {"error": "Unauthorized"}, 401
+
+    current_time = int(time.time())
+    window = 300
+    future_buffer = 60
+
+    if current_time - incoming_timestamp > window:
+        return {"error": "Unauthorized: Request timestamp too old"}, 401
+
+    if incoming_timestamp - current_time > future_buffer:
+        return {"error": "Unauthorized: Request timestamp in the future"}, 401
 
     incoming_data = request.get_json(silent=True)
     if not isinstance(incoming_data, dict):

@@ -30,7 +30,7 @@ signature = hmac.new(
     SECRET_KEY.encode("utf-8"),
     combined_message,
     hashlib.sha256
-).hex_digest() if hasattr(hmac.new(SECRET_KEY.encode("utf-8"), combined_message, hashlib.sha256), "hexdigest") else hmac.new(SECRET_KEY.encode("utf-8"), combined_message, hashlib.sha256).hexdigest()
+).hexdigest() if hasattr(hmac.new(SECRET_KEY.encode("utf-8"), combined_message, hashlib.sha256), "hexdigest") else hmac.new(SECRET_KEY.encode("utf-8"), combined_message, hashlib.sha256).hexdigest()
 
 headers = {
     "X-Signature": signature,
@@ -41,6 +41,5 @@ headers = {
 url = "http://127.0.0.1:5000/event"
 response = requests.post(url, data=payload_string, headers=headers)
 
-print("--- Sender Report (W4 Step 2) ---")
 print("Status code:", response.status_code)
 print("Response Body:", response.text)
