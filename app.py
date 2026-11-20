@@ -13,6 +13,7 @@ if not SECRET_KEY:
     raise RuntimeError("CRITICAL: WEBHOOK_SECRET is missing from environment variables or .env file!")
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024
 
 def verify(secret: str, message: bytes, provided_signature: str) -> bool:
     if not provided_signature or not isinstance(provided_signature, str):
@@ -129,6 +130,10 @@ def receive_event():
     save_data()
 
     return {"Message": "success", "data": incoming_data}, 201
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return {"error": "Payload too large (max limit is 1MB)"}, 413
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -12,6 +12,8 @@ SECRET_KEY = os.getenv("WEBHOOK_SECRET")
 if not SECRET_KEY:
     raise RuntimeError("CRITICAL: WEBHOOK_SECRET is missing from environment variables or .env file!")
 
+huge_string = "A" * (2 * 1024 * 1024)
+
 data_to_send = {
     "event_id": "evt_1001",
     "order_id": "ord_879788",
