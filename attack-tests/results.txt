@@ -1,0 +1,13 @@
+control: a normal letter               201       201     PASS
+forged signature (wrong key)           401       401     PASS
+tampered body, old stamp               401       401     PASS
+replay: signed, but 6 min old          401       401     PASS
+future time (1 hr ahead)               401       401     PASS
+time header swapped                    401       401     PASS
+no signature header                    401       401     PASS
+no time header                         401       401     PASS
+strange time (abc)                     401       401     PASS
+strange signature (accent/invalid)     401       401     PASS
+boundary: 9 KB under limit             201       201     PASS
+boundary: 2 MB over limit              413       413     PASS
+control again: server still alive      201       201     PASS
