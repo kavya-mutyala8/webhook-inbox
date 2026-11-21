@@ -13,7 +13,7 @@ if not SECRET_KEY:
     raise RuntimeError("CRITICAL: WEBHOOK_SECRET is missing from environment variables or .env file!")
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024
 
 def verify(secret: str, message: bytes, provided_signature: str) -> bool:
     if not provided_signature or not isinstance(provided_signature, str):
@@ -31,6 +31,9 @@ ALLOWED_STATUSES = [
     "out_for_delivery", "delivered", "cancelled"
 ]
 ALLOWED_SOURCES = ["payment", "warehouse", "rider"]
+
+WINDOW_SECONDS = 300
+FUTURE_SECONDS = 60
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -54,12 +57,12 @@ def receive_event():
     incoming_timestamp_str = request.headers.get("X-Timestamp", "")
 
     if not incoming_timestamp_str or not incoming_timestamp_str.isdigit():
-        return {"error": "Unauthorized: Missing or invalid timestamp"}, 401
+        return {"error": "Unauthorized"}, 401
 
     try:
         incoming_timestamp = int(incoming_timestamp_str)
     except ValueError:
-        return {"error": "Unauthorized: Invalid timestamp format"}, 401
+        return {"error": "Unauthorized"}, 401
 
     combined_message = f"{incoming_timestamp_str}.".encode("utf-8") + raw_data
 
@@ -67,14 +70,13 @@ def receive_event():
         return {"error": "Unauthorized"}, 401
 
     current_time = int(time.time())
-    window = 300
-    future_buffer = 60
+    
 
-    if current_time - incoming_timestamp > window:
-        return {"error": "Unauthorized: Request timestamp too old"}, 401
+    if current_time - incoming_timestamp > WINDOW_SECONDS:
+        return {"error": "Unauthorized"}, 401
 
-    if incoming_timestamp - current_time > future_buffer:
-        return {"error": "Unauthorized: Request timestamp in the future"}, 401
+    if incoming_timestamp - current_time > FUTURE_SECONDS:
+        return {"error": "Unauthorized"}, 401
 
     incoming_data = request.get_json(silent=True)
     if not isinstance(incoming_data, dict):
@@ -133,7 +135,7 @@ def receive_event():
 
 @app.errorhandler(413)
 def request_entity_too_large(error):
-    return {"error": "Payload too large (max limit is 1MB)"}, 413
+    return {"error": "Payload too large (max limit is 10KB)"}, 413
 
 if __name__ == "__main__":
     app.run(debug=True)

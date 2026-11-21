@@ -12,7 +12,7 @@ SECRET_KEY = os.getenv("WEBHOOK_SECRET")
 if not SECRET_KEY:
     raise RuntimeError("CRITICAL: WEBHOOK_SECRET is missing from environment variables or .env file!")
 
-huge_string = "A" * (2 * 1024 * 1024)
+huge_string = "A" * (11 * 1024)
 
 data_to_send = {
     "event_id": "evt_1001",
@@ -32,7 +32,7 @@ signature = hmac.new(
     SECRET_KEY.encode("utf-8"),
     combined_message,
     hashlib.sha256
-).hexdigest() if hasattr(hmac.new(SECRET_KEY.encode("utf-8"), combined_message, hashlib.sha256), "hexdigest") else hmac.new(SECRET_KEY.encode("utf-8"), combined_message, hashlib.sha256).hexdigest()
+).hexdigest()
 
 headers = {
     "X-Signature": signature,
