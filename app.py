@@ -1,10 +1,10 @@
-import json
 import os
 import time
 import hmac
 import hashlib
 from flask import Flask, request
 from dotenv import load_dotenv
+from database import init_db, get_event_by_id, save_event_and_state
 
 load_dotenv()
 SECRET_KEY = os.getenv("WEBHOOK_SECRET")
@@ -15,6 +15,8 @@ if not SECRET_KEY:
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024
 
+init_db()
+
 def verify(secret: str, message: bytes, provided_signature: str) -> bool:
     if not provided_signature or not isinstance(provided_signature, str):
         return False
@@ -24,8 +26,6 @@ def verify(secret: str, message: bytes, provided_signature: str) -> bool:
     except Exception:
         return False
 
-DATA_FILE = "data.json"
-
 ALLOWED_STATUSES = [
     "placed", "paid", "packed", 
     "out_for_delivery", "delivered", "cancelled"
@@ -34,21 +34,6 @@ ALLOWED_SOURCES = ["payment", "warehouse", "rider"]
 
 WINDOW_SECONDS = 300
 FUTURE_SECONDS = 60
-
-def load_data():
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r") as file:
-                return json.load(file)
-        except json.JSONDecodeError:
-            return []
-    return []
-
-def save_data():
-    with open(DATA_FILE, "w") as file:
-        json.dump(events, file, indent=4)
-
-events = load_data()
 
 @app.route("/event", methods=["POST"])
 def receive_event():
@@ -70,7 +55,6 @@ def receive_event():
         return {"error": "Unauthorized"}, 401
 
     current_time = int(time.time())
-    
 
     if current_time - incoming_timestamp > WINDOW_SECONDS:
         return {"error": "Unauthorized"}, 401
@@ -114,24 +98,25 @@ def receive_event():
 
     incoming_version = raw_version
 
-    for i, record in enumerate(events):
-        if record.get("event_id") == event_id:
-            try:
-                stored_version = int(record.get("version", 0))
-            except (TypeError, ValueError):
-                stored_version = 0
+    existing_event = get_event_by_id(event_id)
+    
+    if existing_event:
+        stored_version = existing_event[3]
 
-            if incoming_version > stored_version:
-                events[i] = incoming_data
-                save_data()
+        if incoming_version > stored_version:
+            success = save_event_and_state(event_id, order_id, status, incoming_version, source, timestamp)
+            if success:
                 return {"Message": "updated", "data": incoming_data}, 200
             else:
-                return {"error": "Duplicate or older version"}, 400
+                return {"error": "Database conflict"}, 400
+        else:
+            return {"error": "Duplicate or older version"}, 400
             
-    events.append(incoming_data)
-    save_data()
-
-    return {"Message": "success", "data": incoming_data}, 201
+    success = save_event_and_state(event_id, order_id, status, incoming_version, source, timestamp)
+    if success:
+        return {"Message": "success", "data": incoming_data}, 201
+    else:
+        return {"error": "Database conflict or error"}, 400
 
 @app.errorhandler(413)
 def request_entity_too_large(error):
