@@ -104,19 +104,24 @@ def receive_event():
         stored_version = existing_event[3]
 
         if incoming_version > stored_version:
-            success = save_event_and_state(event_id, order_id, status, incoming_version, source, timestamp)
-            if success:
+            save_result = save_event_and_state(event_id, order_id, status, incoming_version, source, timestamp)
+            if save_result == "success":
                 return {"Message": "updated", "data": incoming_data}, 200
+            elif save_result == "duplicate":
+                return {"error": "Duplicate event_id"}, 400
             else:
-                return {"error": "Database conflict"}, 400
+                return {"error": "Service Unavailable (Database Error)"}, 503
         else:
             return {"error": "Duplicate or older version"}, 400
             
-    success = save_event_and_state(event_id, order_id, status, incoming_version, source, timestamp)
-    if success:
+    save_result = save_event_and_state(event_id, order_id, status, incoming_version, source, timestamp)
+    
+    if save_result == "success":
         return {"Message": "success", "data": incoming_data}, 201
+    elif save_result == "duplicate":
+        return {"error": "Duplicate event_id"}, 400
     else:
-        return {"error": "Database conflict or error"}, 400
+        return {"error": "Service Unavailable (Database Error)"}, 503
 
 @app.errorhandler(413)
 def request_entity_too_large(error):
