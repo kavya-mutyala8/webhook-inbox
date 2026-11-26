@@ -1,4 +1,5 @@
 import sqlite3
+import datetime
 
 DB_FILE = "inbox.db"
 
@@ -10,10 +11,20 @@ def init_db():
     CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id TEXT UNIQUE NOT NULL,
+    order_id TEXT NOT NULL,
     status TEXT NOT NULL,
     version INTEGER NOT NULL,
     source TEXT NOT NULL,
+    event_timestamp TEXT NOT NULL,
     received_at TEXT NOT NULL
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS order_state (
+    order_id TEXT PRIMARY KEY,
+    current_status TEXT NOT NULL,
+    current_version INTEGER NOT NULL
     )
     """)
 
@@ -41,6 +52,7 @@ def init_db():
 
 def get_event_by_id(event_id):
     conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT event_id, order_id, status, version, source FROM events WHERE event_id = ?", (event_id,))
@@ -48,13 +60,14 @@ def get_event_by_id(event_id):
     finally:
         conn.close()
 
-def save_event_and_state(event_id, order_id, status, version, source, received_at):
+def save_event_and_state(event_id, order_id, status, version, source, event_timestamp):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     try:
-        cursor.execute("""INSERT INTO events (event_id, order_id, status, version, source, received_at)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (event_id, order_id, status, version, source, received_at))
+        received_at = datetime.datetime.utcnow().isoformat()
+        cursor.execute("""INSERT INTO events (event_id, order_id, status, version, source, event_timestamp, received_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (event_id, order_id, status, version, source, event_timestamp, received_at))
 
         cursor.execute("""INSERT INTO order_state (order_id, current_status, current_version)
                VALUES (?, ?, ?)
@@ -64,10 +77,13 @@ def save_event_and_state(event_id, order_id, status, version, source, received_a
                WHERE excluded.current_version > order_state.current_version""",
             (order_id, status, version))
         conn.commit()
-        return True
+        return "success"
     except  sqlite3.IntegrityError:
         conn.rollback()
-        return False
+        return "duplicate"
+    except sqlite3.Error:
+        conn.rollback()
+        return "db_error"
     finally:
         conn.close()
 
