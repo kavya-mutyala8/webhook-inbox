@@ -4,7 +4,7 @@ import hmac
 import hashlib
 from flask import Flask, request
 from dotenv import load_dotenv
-from database import init_db, get_event_by_id, save_event_and_state
+from database import init_db, save_event_and_state
 
 load_dotenv()
 SECRET_KEY = os.getenv("WEBHOOK_SECRET")
@@ -98,28 +98,18 @@ def receive_event():
 
     incoming_version = raw_version
 
-    existing_event = get_event_by_id(event_id)
-    
-    if existing_event:
-        stored_version = existing_event[3]
+    body_hash = hashlib.sha256(raw_data).hexdigest()
 
-        if incoming_version > stored_version:
-            save_result = save_event_and_state(event_id, order_id, status, incoming_version, source, timestamp)
-            if save_result == "success":
-                return {"Message": "updated", "data": incoming_data}, 200
-            elif save_result == "duplicate":
-                return {"error": "Duplicate event_id"}, 400
-            else:
-                return {"error": "Service Unavailable (Database Error)"}, 503
-        else:
-            return {"error": "Duplicate or older version"}, 400
-            
-    save_result = save_event_and_state(event_id, order_id, status, incoming_version, source, timestamp)
-    
+    save_result = save_event_and_state(
+        event_id, order_id, status, incoming_version, source, timestamp, body_hash
+    )
+
     if save_result == "success":
         return {"Message": "success", "data": incoming_data}, 201
     elif save_result == "duplicate":
-        return {"error": "Duplicate event_id"}, 400
+        return {"Message": "duplicate", "data": incoming_data}, 200
+    elif save_result == "conflict":
+        return {"error": "Same event_id, different body (suspicious payload conflict)"}, 409
     else:
         return {"error": "Service Unavailable (Database Error)"}, 503
 
