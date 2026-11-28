@@ -1,26 +1,32 @@
 # webhook-inbox
 
-A small Flask server that receives order-status events as JSON, refuses duplicates and older versions, verifies HMAC signatures with replay protection, enforces size limits, and saves events to SQLite. This is a learning project and it is a work in progress.
+A small Flask server that receives order-status events as JSON, checks they come
+from a trusted sender (HMAC signature and a replay window), saves them in SQLite,
+and ignores duplicates. This is a learning project and a work in progress.
+Details: `docs/EVENT_CONTRACT.md` and `docs/TRADE_OFFS.md`.
 
 ## What works today
 
 - `POST /event` accepts a JSON object with `event_id`, `order_id`, `status`, `version`, `timestamp` and `source`
-- **HMAC-SHA256 Signature Verification:** Validates incoming requests securely using constant-time comparison over a combined message (`timestamp + "." + body`).
-- **Replay Window Protection:** Enforces a 5-minute window and 1-minute future buffer using the `X-Timestamp` header.
-- **Payload Size Limits:** Configured `MAX_CONTENT_LENGTH` (10 KB limit) with custom `413 Request Entity Too Large` JSON responses to prevent DoS attacks.
-- Rejects an empty body, broken JSON, or JSON that is not an object (400)
-- Rejects a missing field and names it
-- `event_id` and `order_id` must be non-empty text, at most 64 characters
+- **HMAC-SHA256 signature check** over a combined message (`timestamp + "." + body`) with a constant-time comparison
+- **Replay window:** 5 minutes, with a 1-minute future allowance, using the `X-Timestamp` header
+- **Size limit:** 10 KB (`MAX_CONTENT_LENGTH`), with a JSON `413` answer
+- Rejects an empty body, broken JSON, or JSON that is not an object (400), and names a missing field
+- `event_id` and `order_id` must be non-empty text of at most 64 characters
 - `status` must be one of: placed, paid, packed, out_for_delivery, delivered, cancelled
 - `source` must be one of: payment, warehouse, rider
 - `version` must be a whole number of 1 or more (`true`, decimals and text are rejected)
-- **Idempotency & Deduplication:** Duplicates get a success answer (`200`) and change nothing; each event keeps a receive count; the same `event_id` with a different body is refused with a `409 Conflict` status.
-- **ACID-Compliant SQLite Storage:** Saves events and order state into SQLite (`inbox.db`), ensuring data survives restarts and concurrent safe updates.
-- **Automated Attack Tests:** A dedicated test suite (`attack-tests/run_attacks.py`) that runs security and idempotency scenarios, verifying that the same event sent 5 times results in 1 row and 1 change.
+- **SQLite storage:** events and the current state of each order are saved in `inbox.db`
+  **before** the server replies; if the database fails the reply is `503` and nothing is stored
+- **Duplicates:** the same `event_id` gets a success answer (`200`) and changes nothing;
+  each event keeps a receive count
+- **Conflicts:** the same `event_id` with a different body (compared by a fingerprint of the
+  raw body) gets `409`
+- **Attack tests:** `attack-tests/run_attacks.py` runs security scenarios and writes a report
 
-### Security Test Results
+### Security test results
 
-| Attack Scenario                      | Expected | Got | Result |
+| Attack scenario                      | Expected | Got | Result |
 | :----------------------------------- | :------: | :-: | :----: |
 | control: a normal letter             |   201    | 201 |  PASS  |
 | forged signature (wrong key)         |   401    | 401 |  PASS  |
@@ -40,14 +46,16 @@ A small Flask server that receives order-status events as JSON, refuses duplicat
 
 ## Not built yet
 
-- Failed-event list and admin replay
-- Automated tests (pytest), CI
+- Version-order tests and the "stale" reply (W9)
+- Processing states, failed-event list and admin replay
+- Automated tests (pytest), threat model, CI
 
 ## Known limits
 
-- Versions are compared per `event_id`, not per order yet
-- Event IDs and their body fingerprints are retained in the database for 30 days to balance storage costs against late-retry protection.
-- Maximum body size: 10 KB.
+- SQLite is one file on one machine: no replication, one server only
+- Event ids and body fingerprints are kept forever: there is no cleanup job yet
+  (a retention window is discussed in `docs/TRADE_OFFS.md`)
+- One shared secret in `.env`, no key rotation
 - The server runs with debug mode on, which is only safe on my own laptop
 
 ## How to run
@@ -59,4 +67,9 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 python app.py
+
+## AI help
+
+I wrote the code myself. I used Claude as an reviewer, and
+some documentation was drafted with AI help and then edited by me.
 ```
