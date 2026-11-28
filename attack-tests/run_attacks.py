@@ -28,7 +28,7 @@ def stamp_for(time_text, body_bytes, key=SECRET_KEY.encode("utf-8")):
     signed = time_text.encode("utf-8") + b"." + body_bytes
     return hmac.new(key, signed, hashlib.sha256).hexdigest()
 
-def send(body_dict, time_text, stamp, with_time=True, with_stamp =True):
+def send(body_dict, time_text, stamp, with_time=True, with_stamp=True):
     headers = {"Content-Type": "application/json"}
     if with_stamp:
         headers["X-Signature"] = stamp
@@ -124,6 +124,28 @@ def attack_12_control_again():
     body_bytes = json.dumps(body).encode("utf-8")
     return send(body, str(now), stamp_for(str(now), body_bytes))
 
+def attack_13_duplicate_event():
+    event_id = f"evt_dup_{time.time()}"
+    body = get_base_body(event_id)
+    body_bytes = json.dumps(body).encode("utf-8")
+    stamp = stamp_for(str(now), body_bytes)
+    send(body, str(now), stamp) # First send -> 201
+    return send(body, str(now), stamp) # Second send -> 200 duplicate
+
+def attack_14_conflict_event():
+    event_id = f"evt_conf_{time.time()}"
+    body1 = get_base_body(event_id)
+    body1_bytes = json.dumps(body1).encode("utf-8")
+    stamp1 = stamp_for(str(now), body1_bytes)
+    send(body1, str(now), stamp1) # First send -> 201
+    
+    # Same ID, different body -> 409 conflict
+    body2 = get_base_body(event_id)
+    body2["order_id"] = "ord_conflict_999"
+    body2_bytes = json.dumps(body2).encode("utf-8")
+    stamp2 = stamp_for(str(now), body2_bytes)
+    return send(body2, str(now), stamp2)
+
 ATTACKS = [
     ("control: a normal letter", 201, attack_0_control),
     ("forged signature (wrong key)", 401, attack_1_forged_signature),
@@ -138,6 +160,8 @@ ATTACKS = [
     ("boundary: 9 KB under limit", 201, attack_10_boundary_under_limit),
     ("boundary: 2 MB over limit", 413, attack_11_boundary_over_limit),
     ("control again: server still alive", 201, attack_12_control_again),
+    ("idempotency duplicate event", 200, attack_13_duplicate_event),
+    ("body conflict same id different body", 409, attack_14_conflict_event),
 ]
 
 if __name__ == "__main__":
@@ -158,4 +182,3 @@ if __name__ == "__main__":
     with open("attack-tests/results.txt", "w") as f:
         f.write("\n".join(results_output) + "\n")
         
-    print("\nAttack tests with boundary checks completed! Saved to attack-tests/results.txt")

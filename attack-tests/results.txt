@@ -11,3 +11,5 @@ strange signature (accent/invalid)     401       401     PASS
 boundary: 9 KB under limit             201       201     PASS
 boundary: 2 MB over limit              413       413     PASS
 control again: server still alive      201       201     PASS
+idempotency duplicate event            200       200     PASS
+body conflict same id different body   409       409     PASS
