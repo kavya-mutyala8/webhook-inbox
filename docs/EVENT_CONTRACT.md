@@ -1,6 +1,6 @@
 # Event Contract
 
-Status: Target design. Version rules differ (they arrive in W9), but duplicates, idempotency, and body conflict handling now match this contract.
+Status: target design. Today's code differs (version rules differ and arrive in W9, versions are compared per event_id). Duplicates and body conflicts now match this contract.
 
 ## Purpose
 
@@ -24,6 +24,9 @@ and applies it to the order only if it is new and not out of date.
 | timestamp | text         | "2026-11-09T09:30:00Z" | required, ISO 8601 in UTC, when the event happened                                                    |
 | source    | text         | "warehouse"            | required, one of: payment, warehouse, rider                                                           |
 
+Note: today's code does not check `timestamp` and `source` yet (planned
+for W2).
+
 ## Allowed statuses
 
 placed, paid, packed, out_for_delivery, delivered, cancelled
@@ -42,18 +45,21 @@ placed, paid, packed, out_for_delivery, delivered, cancelled
 - `X-Timestamp`: when the request was sent, covered by the signature,
   used for the replay window.
 
-## Responses (W8 Contract)
+Exact formats finalised in W3 and W4.
 
-| Situation                                        | Code | Reply                                   | Why                                                                                                             |
-| ------------------------------------------------ | ---- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| New valid event                                  | 201  | `{"Message": "success", "data": ...}`   | Saved successfully and order state updated.                                                                     |
-| Duplicate event_id                               | 200  | `{"Message": "duplicate", "data": ...}` | Senders retry on errors. A duplicate means "already got it", so we answer success and no second effect happens. |
-| Same event_id, different body                    | 409  | `{"error": "..."}`                      | Suspicious payload conflict detected via SHA-256 raw body fingerprinting.                                       |
-| Malformed or invalid event                       | 400  | `{"error": "...", "field": "..."}`      | The sender must fix it. Retrying will not help.                                                                 |
-| Missing or wrong signature, or timestamp too old | 401  | `{"error": "unauthorized"}`             | Same generic message for all, so attackers learn nothing.                                                       |
-| Body too large                                   | 413  | `{"error": "payload too large"}`        | Stop abuse early.                                                                                               |
-| Admin-only action without permission             | 403  | `{"error": "forbidden"}`                | Known caller, not allowed.                                                                                      |
-| Our own failure (database down)                  | 503  | `{"error": "try again later"}`          | Event was NOT saved, so the sender should retry.                                                                |
+## Responses
+
+| Situation                                        | Code | Reply                              | Why                                                                                                             |
+| ------------------------------------------------ | ---- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| New valid event                                  | 201  | `{"result": "accepted"}`           | Saved to SQLite, then acknowledged                                                                              |
+| Duplicate event_id                               | 200  | `{"result": "duplicate"}`          | Senders retry on errors. A duplicate means "already got it", so we answer success and no second effect happens. |
+| Same event_id, different body                    | 409  | `{"error": "conflict"}`            | Suspicious payload conflict detected via raw body fingerprint hash.                                             |
+| Older or equal version for that order            | 200  | `{"result": "ignored_stale"}`      | Late news is not the sender's mistake. We keep it for audit but never apply it.                                 |
+| Malformed or invalid event                       | 400  | `{"error": "...", "field": "..."}` | The sender must fix it. Retrying will not help.                                                                 |
+| Missing or wrong signature, or timestamp too old | 401  | `{"error": "unauthorized"}`        | Same generic message for all, so attackers learn nothing.                                                       |
+| Body too large                                   | 413  | `{"error": "payload too large"}`   | Stop abuse early.                                                                                               |
+| Admin-only action without permission             | 403  | `{"error": "forbidden"}`           | Known caller, not allowed.                                                                                      |
+| Our own failure (database down)                  | 503  | `{"error": "try again later"}`     | Event was NOT saved, so the sender should retry.                                                                |
 
 ## Order of checks
 
